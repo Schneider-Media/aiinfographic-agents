@@ -25,8 +25,10 @@ app.get('/', (_req, res) => {
 
 app.post('/slack/events', async (req, res) => {
   const { body } = req;
+  console.log('[slack] Received event:', JSON.stringify(body).slice(0, 500));
 
   if (body.type === 'url_verification') {
+    console.log('[slack] URL verification challenge');
     res.json({ challenge: body.challenge });
     return;
   }
@@ -34,18 +36,27 @@ app.post('/slack/events', async (req, res) => {
   res.status(200).send();
 
   const event = body.event;
-  if (!event || event.type !== 'message' || event.bot_id) return;
+  if (!event || event.type !== 'message' || event.bot_id) {
+    console.log('[slack] Ignored event:', event?.type, event?.bot_id ? '(bot)' : '');
+    return;
+  }
 
   const text: string = event.text ?? '';
+  console.log('[slack] Message text:', text);
   const match = text.match(/^task:\s*(.+)/is);
-  if (!match) return;
+  if (!match) {
+    console.log('[slack] No task: prefix found, ignoring');
+    return;
+  }
 
   const description = match[1].trim();
   const title = description.slice(0, 60);
+  console.log('[slack] Inserting task:', title);
 
   try {
     await insertTask(title, description, event.ts);
     await postThreadReply('📥 Task received! Added to the queue.', event.ts);
+    console.log('[slack] Task inserted and reply sent');
   } catch (err) {
     console.error('Failed to insert task from Slack:', (err as Error).message);
   }

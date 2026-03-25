@@ -2,8 +2,11 @@
   "name": "aiinfographic-agents",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/src/index.js",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -13,7 +16,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/Kyleschneiderx/aiinfographic-agents/issues"
   },
@@ -22,6 +25,7 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@supabase/supabase-js": "^2.100.0",
     "axios": "^1.13.6",
+    "dotenv": "^17.3.1",
     "express": "^5.2.1"
   },
   "devDependencies": {

@@ -14,7 +14,11 @@ export interface Task {
 
 const TABLE = 'agent_tasks';
 
+let _client: SupabaseClient | null = null;
+
 function getClient(): SupabaseClient {
+  if (_client) return _client;
+
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_KEY;
 
@@ -25,7 +29,8 @@ function getClient(): SupabaseClient {
     throw new Error('SUPABASE_KEY env var is required but not set');
   }
 
-  return createClient(url, key);
+  _client = createClient(url, key);
+  return _client;
 }
 
 export async function getNextPendingTask(): Promise<Task | null> {
@@ -40,7 +45,7 @@ export async function getNextPendingTask(): Promise<Task | null> {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') return null; // no rows found
+    if (error.code === 'PGRST116') return null;
     throw new Error(`Failed to fetch pending task: ${error.message}`);
   }
 

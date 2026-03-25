@@ -15,7 +15,14 @@ function slackPost(text: string, threadTs?: string): Promise<void> {
 export async function runAgentTeam(task: Task): Promise<string | null> {
   await slackPost(`🤖 Starting on: *${task.title}*`, task.thread_ts);
 
-  const workDir = cloneOrPullRepo('infographic');
+  let workDir: string;
+  try {
+    workDir = cloneOrPullRepo('infographic');
+  } catch (err) {
+    await slackPost(`❌ Failed to clone repo: ${(err as Error).message}`, task.thread_ts);
+    throw err;
+  }
+
   const branchName = `agent/${task.id.slice(0, 8)}`;
   createBranch('infographic', branchName);
 
@@ -29,6 +36,7 @@ export async function runAgentTeam(task: Task): Promise<string | null> {
       await slackPost(`❌ Planner failed: ${(err as Error).message}`, task.thread_ts);
       throw err;
     }
+    console.log(`[orchestrator] Plan: ${plan.steps.length} steps`);
 
     // Coder/Reviewer loop
     let review: Awaited<ReturnType<typeof runReviewer>> | undefined;
@@ -52,6 +60,8 @@ export async function runAgentTeam(task: Task): Promise<string | null> {
         await slackPost(`❌ Reviewer failed: ${(err as Error).message}`, task.thread_ts);
         throw err;
       }
+
+      console.log(`[orchestrator] Review attempt ${attempt}: approved=${review.approved}, confidence=${review.confidence}`);
 
       if (review.approved) break;
 
@@ -84,6 +94,10 @@ export async function runAgentTeam(task: Task): Promise<string | null> {
     await slackPost(`🎉 PR ready for review: ${prUrl}`, task.thread_ts);
     return prUrl;
   } finally {
-    resetToMain('infographic');
+    try {
+      resetToMain('infographic');
+    } catch (err) {
+      console.error('[orchestrator] Failed to reset to main:', (err as Error).message);
+    }
   }
 }

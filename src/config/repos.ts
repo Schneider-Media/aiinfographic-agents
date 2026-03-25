@@ -5,17 +5,18 @@ interface RepoConfig {
   workDir: string;
 }
 
-export const REPOS: Record<RepoKey, RepoConfig> = {
-  infographic: {
-    url: `https://${process.env.GITHUB_TOKEN}@github.com/Kyleschneiderx/ai-infographic-generator.git`,
-    workDir: '/tmp/infographic-workspace',
-  },
-};
-
 export function getRepoConfig(repo: RepoKey): RepoConfig {
-  if (!process.env.GITHUB_TOKEN) {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
     throw new Error('GITHUB_TOKEN env var is required but not set');
   }
 
-  return REPOS[repo];
+  const configs: Record<RepoKey, RepoConfig> = {
+    infographic: {
+      url: `https://${token}@github.com/Kyleschneiderx/ai-infographic-generator.git`,
+      workDir: '/tmp/infographic-workspace',
+    },
+  };
+
+  return configs[repo];
 }

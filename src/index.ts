@@ -15,6 +15,9 @@ app.use(express.json());
 
 let isProcessing = false;
 
+// Track processed Slack event IDs to prevent duplicate handling on retries
+const processedEvents = new Set<string>();
+
 // ── HEALTH CHECK ───────────────────────────────────────
 
 app.get('/', (_req, res) => {
@@ -23,21 +26,37 @@ app.get('/', (_req, res) => {
 
 // ── SLACK WEBHOOK ──────────────────────────────────────
 
-app.post('/slack/events', async (req, res) => {
+app.post('/slack/events', (req, res) => {
   const { body } = req;
-  console.log('[slack] Received event:', JSON.stringify(body).slice(0, 500));
 
+  // URL verification (Slack setup handshake)
   if (body.type === 'url_verification') {
     console.log('[slack] URL verification challenge');
     res.json({ challenge: body.challenge });
     return;
   }
 
+  // Respond 200 immediately so Slack doesn't retry
   res.status(200).send();
 
+  // Deduplicate retried events
+  const eventId: string | undefined = body.event_id;
+  if (eventId) {
+    if (processedEvents.has(eventId)) {
+      console.log('[slack] Duplicate event ignored:', eventId);
+      return;
+    }
+    processedEvents.add(eventId);
+    // Clean up old entries to prevent memory leak
+    if (processedEvents.size > 1000) {
+      const first = processedEvents.values().next().value;
+      if (first) processedEvents.delete(first);
+    }
+  }
+
   const event = body.event;
-  if (!event || event.type !== 'message' || event.bot_id) {
-    console.log('[slack] Ignored event:', event?.type, event?.bot_id ? '(bot)' : '');
+  if (!event || event.type !== 'message' || event.bot_id || event.subtype) {
+    console.log('[slack] Ignored event:', event?.type, event?.subtype ?? '', event?.bot_id ? '(bot)' : '');
     return;
   }
 
@@ -53,18 +72,25 @@ app.post('/slack/events', async (req, res) => {
   const title = description.slice(0, 60);
   console.log('[slack] Inserting task:', title);
 
-  try {
-    await insertTask(title, description, event.ts);
-    await postThreadReply('📥 Task received! Added to the queue.', event.ts);
-    console.log('[slack] Task inserted and reply sent');
-  } catch (err) {
-    console.error('Failed to insert task from Slack:', (err as Error).message);
-  }
+  // Handle async work in background — res already sent
+  (async () => {
+    try {
+      await insertTask(title, description, event.ts);
+      await postThreadReply('📥 Task received! Added to the queue.', event.ts);
+      console.log('[slack] Task inserted and reply sent');
+    } catch (err) {
+      console.error('[slack] Failed to insert task:', (err as Error).message);
+    }
+  })();
 });
 
 // ── AGENT POLLING LOOP ─────────────────────────────────
 
 async function agentLoop(): Promise<void> {
+  // Wait for server to be fully ready before polling
+  await new Promise((r) => setTimeout(r, 5_000));
+  console.log('[agent] Polling loop started');
+
   while (true) {
     try {
       if (!isProcessing) {

@@ -15,6 +15,12 @@ app.use(express.json());
 
 let isProcessing = false;
 
+// ── HEALTH CHECK ───────────────────────────────────────
+
+app.get('/', (_req, res) => {
+  res.json({ status: 'ok', processing: isProcessing });
+});
+
 // ── SLACK WEBHOOK ──────────────────────────────────────
 
 app.post('/slack/events', async (req, res) => {
